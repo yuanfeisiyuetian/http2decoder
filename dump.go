@@ -9,6 +9,10 @@ import (
 
 type JsonBody struct {
 	Settings map[string]uint32
+	SrcIP    string
+	DstIP    string
+	SrcPort  string
+	DstPort  string
 	Request  struct {
 		Method string
 		Host   string
@@ -36,6 +40,10 @@ func (s *HTTP2Stream) DumpJson() {
 	for _, v := range s.bidi.b.ReqSettings {
 		jb.Settings[v.ID.String()] = v.Val
 	}
+	jb.SrcIP = s.SrcIP.String()
+	jb.DstIP = s.DstIP.String()
+	jb.SrcPort = s.SrcPort.String()
+	jb.DstPort = s.DstPort.String()
 	// Request
 	req := http.Request{}
 	if s.bidi.a.isRequest {

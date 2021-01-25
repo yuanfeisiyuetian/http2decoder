@@ -84,6 +84,8 @@ func main() {
 				continue
 			}
 			tcp := packet.TransportLayer().(*layers.TCP)
+			log.Println("+++++++++++=============")
+			log.Println(packet.NetworkLayer().NetworkFlow().Src(), packet.NetworkLayer().NetworkFlow().Dst(), tcp.TransportFlow().Src(), tcp.TransportFlow().Dst())
 			assembler.AssembleWithTimestamp(packet.NetworkLayer().NetworkFlow(), tcp, packet.Metadata().Timestamp)
 
 		case <-ticker:

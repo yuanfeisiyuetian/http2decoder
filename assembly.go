@@ -3,11 +3,9 @@ package main
 import (
 	"fmt"
 	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/tcpassembly"
 	"golang.org/x/net/http2"
 	"log"
-	"net"
 	"net/http"
 	"time"
 )
@@ -32,11 +30,11 @@ type HTTP2Stream struct {
 	isHTTP2, isRequest, isResponse bool
 	Request                        http.Request
 	Response                       http.Response
+	SrcIP                          gopacket.Endpoint
+	DstIP                          gopacket.Endpoint
+	SrcPort                        gopacket.Endpoint
+	DstPort                        gopacket.Endpoint
 	Time                           time.Time
-	SrcIp                          net.IPAddr
-	DstIp                          net.IPAddr
-	SrcPort                        int64
-	DstPort                        int64
 }
 
 // bidi stores each unidirectional side of a bidirectional stream.
@@ -70,6 +68,10 @@ func (f *myFactory) New(netFlow, tcpFlow gopacket.Flow) tcpassembly.Stream {
 			ProtoMajor: 2,
 			ProtoMinor: 0,
 		},
+		SrcIP:   netFlow.Src(),
+		DstIP:   netFlow.Dst(),
+		SrcPort: tcpFlow.Src(),
+		DstPort: tcpFlow.Dst(),
 	}
 
 	// Find the bidi bidirectional struct for this stream, creating a new one if
@@ -154,38 +156,4 @@ func (bd *bidi) maybeFinish() bool {
 		return true
 	}
 	return false
-}
-
-type TCPStream struct {
-	Assemble tcpassembly.Assembler
-	Time     time.Time
-	SrcIp    net.IP
-	DstIp    net.IP
-	SrcPort  int64
-	DstPort  int64
-	key      key
-	count    int64
-}
-type TCPStreamlist struct {
-	TCPMap map[key]*TCPStream
-}
-
-func (ts *TCPStreamlist) Assemble(assemble tcpassembly.Assembler, netFlow gopacket.Flow, t *layers.TCP, ip *layers.IPv4, timestamp time.Time) {
-	// Ignore empty TCP packets
-	if !t.SYN && !t.FIN && !t.RST && len(t.LayerPayload()) == 0 {
-		return
-	}
-	k := key{netFlow, t.TransportFlow()}
-	bd := ts.TCPMap[k]
-	netFlow.Src()
-	if bd == nil {
-		bd = &TCPStream{Assemble: assemble, Time: timestamp, SrcIp: ip.SrcIP, DstIp: ip.DstIP, key: k, count: 1}
-		// Register bidirectional with the reverse key, so the matching stream going
-		// the other direction will find it.
-		ts.TCPMap[key{netFlow.Reverse(), netFlow.Reverse()}] = bd
-		assemble.AssembleWithTimestamp(netFlow, t, timestamp)
-	} else {
-		assemble.AssembleWithTimestamp(netFlow, t, timestamp)
-		bd.count++
-	}
 }
