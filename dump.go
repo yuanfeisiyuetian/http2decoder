@@ -13,6 +13,7 @@ type JsonBody struct {
 	DstIP    string
 	SrcPort  string
 	DstPort  string
+	Time     string
 	Request  struct {
 		Method string
 		Host   string
@@ -44,6 +45,7 @@ func (s *HTTP2Stream) DumpJson() {
 	jb.DstIP = s.DstIP.String()
 	jb.SrcPort = s.SrcPort.String()
 	jb.DstPort = s.DstPort.String()
+	jb.Time = s.bidi.firstPacketSeen.String()
 	// Request
 	req := http.Request{}
 	if s.bidi.a.isRequest {

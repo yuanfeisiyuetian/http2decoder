@@ -43,9 +43,10 @@ type HTTP2Stream struct {
 // created with 'a' set to the new stream.  If we DO have an opposite stream,
 // 'b' is set to the new stream.
 type bidi struct {
-	key            key          // Key of the first stream, mostly for logging.
-	a, b           *HTTP2Stream // the two bidirectional streams.
-	lastPacketSeen time.Time    // last time we saw a packet from either stream.
+	key             key          // Key of the first stream, mostly for logging.
+	a, b            *HTTP2Stream // the two bidirectional streams.
+	lastPacketSeen  time.Time    // last time we saw a packet from either stream.
+	firstPacketSeen time.Time    //first time we saw a packet from either stream.
 }
 
 // myFactory implements tcpassmebly.StreamFactory
@@ -73,7 +74,6 @@ func (f *myFactory) New(netFlow, tcpFlow gopacket.Flow) tcpassembly.Stream {
 		SrcPort: tcpFlow.Src(),
 		DstPort: tcpFlow.Dst(),
 	}
-
 	// Find the bidi bidirectional struct for this stream, creating a new one if
 	// one doesn't already exist in the map.
 	k := key{netFlow, tcpFlow}
@@ -127,6 +127,13 @@ func (s *HTTP2Stream) Reassembled(rs []tcpassembly.Reassembly) {
 		// where packets are being read from a file and could be very old.
 		if s.bidi.lastPacketSeen.Before(r.Seen) {
 			s.bidi.lastPacketSeen = r.Seen
+		}
+		Firstdata := time.Date(0001, 01, 01, 00, 00, 00, 0000, time.UTC)
+		if s.bidi.firstPacketSeen.Equal(Firstdata) {
+			s.bidi.firstPacketSeen = r.Seen
+		}
+		if s.bidi.firstPacketSeen.After(r.Seen) {
+			s.bidi.firstPacketSeen = r.Seen
 		}
 	}
 }
