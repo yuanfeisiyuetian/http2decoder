@@ -79,5 +79,5 @@ func (s *HTTP2Stream) DumpJson() {
 	}
 	fmt.Println("=======")
 	enc := json.NewEncoder(outputStream)
-	enc.Encode(jb)
+	_ = enc.Encode(jb)
 }
