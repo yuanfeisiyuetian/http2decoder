@@ -5,15 +5,17 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 )
 
 type JsonBody struct {
-	Settings map[string]uint32
+	//Settings map[string]uint32
 	SrcIP    string
 	DstIP    string
 	SrcPort  string
 	DstPort  string
 	Time     string
+	Streamid string
 	Request  struct {
 		Method string
 		Host   string
@@ -32,20 +34,21 @@ type JsonBody struct {
 func (s *HTTP2Stream) DumpJson() {
 	jb := JsonBody{}
 	// Settings
-	if jb.Settings == nil {
-		jb.Settings = map[string]uint32{}
-	}
-	for _, v := range s.bidi.a.ReqSettings {
-		jb.Settings[v.ID.String()] = v.Val
-	}
-	for _, v := range s.bidi.b.ReqSettings {
-		jb.Settings[v.ID.String()] = v.Val
-	}
+	//if jb.Settings == nil {
+	//	jb.Settings = map[string]uint32{}
+	//}
+	//for _, v := range s.bidi.a.ReqSettings {
+	//	jb.Settings[v.ID.String()] = v.Val
+	//}
+	//for _, v := range s.bidi.b.ReqSettings {
+	//	jb.Settings[v.ID.String()] = v.Val
+	//}
 	jb.SrcIP = s.SrcIP.String()
 	jb.DstIP = s.DstIP.String()
 	jb.SrcPort = s.SrcPort.String()
 	jb.DstPort = s.DstPort.String()
 	jb.Time = s.bidi.firstPacketSeen.String()
+	jb.Streamid = strconv.Itoa(int(s.Streamid))
 	// Request
 	req := http.Request{}
 	if s.bidi.a.isRequest {

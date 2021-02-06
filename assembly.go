@@ -35,6 +35,9 @@ type HTTP2Stream struct {
 	SrcPort                        gopacket.Endpoint
 	DstPort                        gopacket.Endpoint
 	Time                           time.Time
+	Streamid                       uint32
+	Framer                         *http2.Framer
+	isfirst                        bool
 }
 
 // bidi stores each unidirectional side of a bidirectional stream.
@@ -69,16 +72,17 @@ func (f *myFactory) New(netFlow, tcpFlow gopacket.Flow) tcpassembly.Stream {
 			ProtoMajor: 2,
 			ProtoMinor: 0,
 		},
-		SrcIP:   netFlow.Src(),
-		DstIP:   netFlow.Dst(),
-		SrcPort: tcpFlow.Src(),
-		DstPort: tcpFlow.Dst(),
+		isfirst: true,
 	}
 	// Find the bidi bidirectional struct for this stream, creating a new one if
 	// one doesn't already exist in the map.
 	k := key{netFlow, tcpFlow}
 	bd := f.bidiMap[k]
 	if bd == nil {
+		s.SrcIP = netFlow.Src()
+		s.DstIP = netFlow.Dst()
+		s.SrcPort = tcpFlow.Src()
+		s.DstPort = tcpFlow.Dst()
 		bd = &bidi{a: s, key: k}
 		log.Printf("[%v] created first side of bidirectional stream", bd.key)
 		// Register bidirectional with the reverse key, so the matching stream going

@@ -17,10 +17,13 @@ const initialHeaderTableSize = 4096
 
 func (s *HTTP2Stream) Decoder(buf []byte) {
 	w := new(bytes.Buffer)
-	framer := http2.NewFramer(w, bytes.NewReader(buf))
-	framer.ReadMetaHeaders = hpack.NewDecoder(initialHeaderTableSize, nil)
+	s.Framer = http2.NewFramer(w, bytes.NewReader(buf))
+	if s.isfirst {
+		s.Framer.ReadMetaHeaders = hpack.NewDecoder(initialHeaderTableSize, nil)
+	}
+	s.isfirst = false
 	for {
-		frame, err := framer.ReadFrame()
+		frame, err := s.Framer.ReadFrame()
 		if err == io.EOF {
 			// We must read until we see an EOF... very important!
 			return
@@ -32,12 +35,13 @@ func (s *HTTP2Stream) Decoder(buf []byte) {
 			// fh := frame.Header()
 			switch fm := frame.(type) {
 			case *http2.SettingsFrame:
-				for i := 0; i < fm.NumSettings(); i++ {
-					s.ReqSettings = append(s.ReqSettings, fm.Setting(i))
-				}
+				//for i := 0; i < fm.NumSettings(); i++ {
+				//	s.ReqSettings = append(s.ReqSettings, fm.Setting(i))
+				//}
 			case *http2.HeadersFrame:
 			case *http2.MetaHeadersFrame:
 				pf := fm.PseudoFields()
+				s.Streamid = fm.StreamID
 				for _, hf := range pf {
 					switch hf.Name {
 					case ":method", ":path", ":scheme", ":authority":

@@ -83,6 +83,15 @@ func main() {
 				log.Println("Unusable packet")
 				continue
 			}
+			var streamid uint32
+			applicationLayer := packet.ApplicationLayer()
+			if applicationLayer != nil {
+				payload := applicationLayer.LayerContents()
+				streamid = uint32(payload[8] << 1 >> 1)
+				log.Println(streamid)
+			} else {
+				streamid = 0
+			}
 			tcp := packet.TransportLayer().(*layers.TCP)
 			assembler.AssembleWithTimestamp(packet.NetworkLayer().NetworkFlow(), tcp, packet.Metadata().Timestamp)
 
