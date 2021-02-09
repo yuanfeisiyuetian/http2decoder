@@ -15,18 +15,23 @@ import (
 
 const initialHeaderTableSize = 4096
 
-func (s *HTTP2Stream) Decoder(buf []byte) {
+func (s *HTTP2Stream) Decoder(buf []byte) uint32 {
 	w := new(bytes.Buffer)
-	s.Framer = http2.NewFramer(w, bytes.NewReader(buf))
-	if s.isfirst {
-		s.Framer.ReadMetaHeaders = hpack.NewDecoder(initialHeaderTableSize, nil)
+	if !s.isfirst {
+		decode := s.Framer.ReadMetaHeaders
+		s.Framer = http2.NewFramer(w, bytes.NewReader(buf))
+		s.Framer.ReadMetaHeaders = decode
 	}
-	s.isfirst = false
+	if s.isfirst {
+		s.Framer = http2.NewFramer(w, bytes.NewReader(buf))
+		s.Framer.ReadMetaHeaders = hpack.NewDecoder(initialHeaderTableSize, nil)
+		s.isfirst = false
+	}
 	for {
 		frame, err := s.Framer.ReadFrame()
 		if err == io.EOF {
 			// We must read until we see an EOF... very important!
-			return
+			return s.Streamid
 		} else if err != nil {
 			log.Println("Error reading stream", err)
 			continue
@@ -53,29 +58,34 @@ func (s *HTTP2Stream) Decoder(buf []byte) {
 					}
 				}
 				if s.isRequest {
-					s.Request.Method = fm.PseudoValue("method")
-					s.Request.URL, err = url.ParseRequestURI(fm.PseudoValue("path"))
-					s.Request.RequestURI = fm.PseudoValue("path")
-					s.Request.Host = fm.PseudoValue("authority")
+					request := s.Request[s.Streamid]
+					request.Method = fm.PseudoValue("method")
+					request.URL, _ = url.ParseRequestURI(fm.PseudoValue("path"))
+					request.RequestURI = fm.PseudoValue("path")
+					request.Host = fm.PseudoValue("authority")
+					if request.Header == nil {
+						request.Header = make(http.Header)
+					}
 					// RegularFields
-					if s.Request.Header == nil {
-						s.Request.Header = make(http.Header)
-					}
+					//if s.Request.Header == nil {
+					//	s.Request.Header = make(http.Header)
+					//}
 					for _, hf := range fm.RegularFields() {
-						s.Request.Header.Add(http.CanonicalHeaderKey(hf.Name), hf.Value)
+						request.Header.Add(http.CanonicalHeaderKey(hf.Name), hf.Value)
 					}
+					s.Request[s.Streamid] = request
 				} else if s.isResponse {
 					// PseudoValue
-					s.Response.StatusCode, _ = strconv.Atoi(fm.PseudoValue("status"))
-					s.Response.Status = http.StatusText(s.Response.StatusCode)
-					// RegularFields
-					if s.Response.Header == nil {
-						s.Response.Header = map[string][]string{}
+					response := s.Response[s.Streamid]
+					response.StatusCode, _ = strconv.Atoi(fm.PseudoValue("status"))
+					response.Status = http.StatusText(response.StatusCode)
+					if response.Header == nil {
+						response.Header = map[string][]string{}
 					}
 					for _, hf := range fm.RegularFields() {
-						s.Response.Header.Set(http.CanonicalHeaderKey(hf.Name), hf.Value)
+						response.Header.Set(http.CanonicalHeaderKey(hf.Name), hf.Value)
 					}
-					s.Response.StatusCode, _ = strconv.Atoi(fm.PseudoValue("status"))
+					s.Response[s.Streamid] = response
 				}
 
 			case *http2.WindowUpdateFrame:
@@ -83,24 +93,29 @@ func (s *HTTP2Stream) Decoder(buf []byte) {
 			case *http2.PingFrame:
 				//fmt.Println(fm.StreamID, fm.Type)
 			case *http2.DataFrame:
+				s.Streamid = fm.StreamID
 				if s.isRequest {
-					if s.Request.Body == nil {
+					request := s.Request[s.Streamid]
+					if request.Body == nil {
 						body := fm.Data()
-						s.Request.Body = ioutil.NopCloser(bytes.NewReader(body))
+						request.Body = ioutil.NopCloser(bytes.NewReader(body))
 					} else {
-						body, _ := ioutil.ReadAll(s.Request.Body)
+						body, _ := ioutil.ReadAll(request.Body)
 						body = append(body, fm.Data()...)
-						s.Request.Body = ioutil.NopCloser(bytes.NewReader(body))
+						request.Body = ioutil.NopCloser(bytes.NewReader(body))
 					}
+					s.Request[s.Streamid] = request
 				} else {
-					if s.Response.Body == nil {
+					response := s.Response[s.Streamid]
+					if response.Body == nil {
 						body := fm.Data()
-						s.Response.Body = ioutil.NopCloser(bytes.NewReader(body))
+						response.Body = ioutil.NopCloser(bytes.NewReader(body))
 					} else {
-						body, _ := ioutil.ReadAll(s.Response.Body)
+						body, _ := ioutil.ReadAll(response.Body)
 						body = append(body, fm.Data()...)
-						s.Response.Body = ioutil.NopCloser(bytes.NewReader(body))
+						response.Body = ioutil.NopCloser(bytes.NewReader(body))
 					}
+					s.Response[s.Streamid] = response
 				}
 			case *http2.RSTStreamFrame:
 				//fmt.Println(fm.StreamID, fm.Type)
@@ -116,5 +131,4 @@ func (s *HTTP2Stream) Decoder(buf []byte) {
 			}
 		}
 	}
-	return
 }

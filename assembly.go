@@ -28,13 +28,13 @@ type HTTP2Stream struct {
 	ReqSettings                    []http2.Setting
 	RespSettings                   []http2.Setting
 	isHTTP2, isRequest, isResponse bool
-	Request                        http.Request
-	Response                       http.Response
+	Request                        map[uint32]http.Request
+	Response                       map[uint32]http.Response
 	SrcIP                          gopacket.Endpoint
 	DstIP                          gopacket.Endpoint
 	SrcPort                        gopacket.Endpoint
 	DstPort                        gopacket.Endpoint
-	Time                           time.Time
+	Time                           map[uint32]time.Time
 	Streamid                       uint32
 	Framer                         *http2.Framer
 	isfirst                        bool
@@ -46,10 +46,9 @@ type HTTP2Stream struct {
 // created with 'a' set to the new stream.  If we DO have an opposite stream,
 // 'b' is set to the new stream.
 type bidi struct {
-	key             key          // Key of the first stream, mostly for logging.
-	a, b            *HTTP2Stream // the two bidirectional streams.
-	lastPacketSeen  time.Time    // last time we saw a packet from either stream.
-	firstPacketSeen time.Time    //first time we saw a packet from either stream.
+	key            key          // Key of the first stream, mostly for logging.
+	a, b           *HTTP2Stream // the two bidirectional streams.
+	lastPacketSeen time.Time    // last time we saw a packet from either stream.
 }
 
 // myFactory implements tcpassmebly.StreamFactory
@@ -62,17 +61,20 @@ type myFactory struct {
 func (f *myFactory) New(netFlow, tcpFlow gopacket.Flow) tcpassembly.Stream {
 	// Create a new stream.
 	s := &HTTP2Stream{
-		Request: http.Request{
-			Proto:      "HTTP/2.0",
-			ProtoMajor: 2,
-			ProtoMinor: 0,
-		},
-		Response: http.Response{
-			Proto:      "HTTP/2.0",
-			ProtoMajor: 2,
-			ProtoMinor: 0,
-		},
-		isfirst: true,
+		//Request: http.Request{
+		//	Proto:      "HTTP/2.0",
+		//	ProtoMajor: 2,
+		//	ProtoMinor: 0,
+		//},
+		//Response: http.Response{
+		//	Proto:      "HTTP/2.0",
+		//	ProtoMajor: 2,
+		//	ProtoMinor: 0,
+		//},
+		isfirst:  true,
+		Request:  make(map[uint32]http.Request),
+		Response: make(map[uint32]http.Response),
+		Time:     make(map[uint32]time.Time),
 	}
 	// Find the bidi bidirectional struct for this stream, creating a new one if
 	// one doesn't already exist in the map.
@@ -120,24 +122,28 @@ func (f *myFactory) collectOldStreams() {
 // Reassembled handles reassembled TCP stream data.
 func (s *HTTP2Stream) Reassembled(rs []tcpassembly.Reassembly) {
 	for _, r := range rs {
-		s.Decoder(r.Bytes)
-		// For now, we'll simply count the bytes on each side of the TCP stream.
-		s.bytes += int64(len(r.Bytes))
-		if r.Skip > 0 {
-			s.bytes += int64(r.Skip)
-		}
-		// Mark that we've received new packet data.
-		// We could just use time.Now, but by using r.Seen we handle the case
-		// where packets are being read from a file and could be very old.
-		if s.bidi.lastPacketSeen.Before(r.Seen) {
-			s.bidi.lastPacketSeen = r.Seen
-		}
-		Firstdata := time.Date(0001, 01, 01, 00, 00, 00, 0000, time.UTC)
-		if s.bidi.firstPacketSeen.Equal(Firstdata) {
-			s.bidi.firstPacketSeen = r.Seen
-		}
-		if s.bidi.firstPacketSeen.After(r.Seen) {
-			s.bidi.firstPacketSeen = r.Seen
+		if len(r.Bytes) != 0 {
+			sid := s.Decoder(r.Bytes)
+			// For now, we'll simply count the bytes on each side of the TCP stream.
+			s.bytes += int64(len(r.Bytes))
+			if r.Skip > 0 {
+				s.bytes += int64(r.Skip)
+			}
+			// Mark that we've received new packet data.
+			// We could just use time.Now, but by using r.Seen we handle the case
+			// where packets are being read from a file and could be very old.
+			if s.bidi.lastPacketSeen.Before(r.Seen) {
+				s.bidi.lastPacketSeen = r.Seen
+			}
+			if sid != 0 {
+				Firstdata := time.Date(0001, 01, 01, 00, 00, 00, 0000, time.UTC)
+				if s.Time[sid].Equal(Firstdata) {
+					s.Time[sid] = r.Seen
+				}
+				if s.Time[sid].After(r.Seen) {
+					s.Time[sid] = r.Seen
+				}
+			}
 		}
 	}
 }
