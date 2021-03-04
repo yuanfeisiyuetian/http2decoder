@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/jmoiron/sqlx"
 	"io/ioutil"
 	"net/http"
 	"strconv"
@@ -33,6 +35,9 @@ type JsonBody struct {
 
 func (s *HTTP2Stream) DumpJson() {
 	jb := JsonBody{}
+	var Db *sqlx.DB = ConnectMysql()
+	defer Db.Close()
+
 	// Settings
 	//if jb.Settings == nil {
 	//	jb.Settings = map[string]uint32{}
@@ -69,7 +74,7 @@ func (s *HTTP2Stream) DumpJson() {
 		}
 		jb.Request.Method = v.Method
 		jb.Request.Host = v.Host
-		jb.Request.Path = v.URL.Path
+		jb.Request.Path = v.URL.RequestURI()
 		jb.Request.Proto = v.Proto
 		jb.Request.Header = v.Header
 		jb.Time = s.Time[k].String()
@@ -81,6 +86,22 @@ func (s *HTTP2Stream) DumpJson() {
 		if rsp[k].Body != nil {
 			jb.Response.Body, _ = ioutil.ReadAll(rsp[k].Body)
 		}
+
+		//写入数据库
+		reqheader, err := json.Marshal(jb.Request.Header)
+		resheader, err := json.Marshal(jb.Response.Header)
+		reqbody := base64.StdEncoding.EncodeToString(jb.Request.Body)
+		resbody := base64.StdEncoding.EncodeToString(jb.Response.Body)
+		r, err := Db.Exec("insert into traffic_field(sid, time, srcip, srcport,desip,desport,url,method,status,reqheader,reqbody,resheader,resbody,pcap_id) values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", jb.Streamid, jb.Time, jb.SrcIP, jb.SrcPort, jb.DstIP, jb.DstPort, v.URL.RequestURI(), v.Method, jb.Response.StatusCode, reqheader, reqbody, resheader, resbody, 1)
+		if err != nil {
+			fmt.Println("exec failed, ", err)
+		}
+		id, err := r.LastInsertId()
+		if err != nil {
+			fmt.Println("exec failed, ", err)
+		}
+		fmt.Println("insert succ:", id)
+
 		fmt.Println("=======")
 		enc := json.NewEncoder(outputStream)
 		_ = enc.Encode(jb)

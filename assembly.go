@@ -80,11 +80,13 @@ func (f *myFactory) New(netFlow, tcpFlow gopacket.Flow) tcpassembly.Stream {
 	// one doesn't already exist in the map.
 	k := key{netFlow, tcpFlow}
 	bd := f.bidiMap[k]
-	if bd == nil {
+	if s.isfirst {
 		s.SrcIP = netFlow.Src()
 		s.DstIP = netFlow.Dst()
 		s.SrcPort = tcpFlow.Src()
 		s.DstPort = tcpFlow.Dst()
+	}
+	if bd == nil {
 		bd = &bidi{a: s, key: k}
 		log.Printf("[%v] created first side of bidirectional stream", bd.key)
 		// Register bidirectional with the reverse key, so the matching stream going
