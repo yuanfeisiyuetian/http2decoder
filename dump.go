@@ -7,6 +7,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"strconv"
 )
 
@@ -78,6 +79,8 @@ func (s *HTTP2Stream) DumpJson() {
 		jb.Request.Proto = v.Proto
 		jb.Request.Header = v.Header
 		jb.Time = s.Time[k].String()
+		url, _ := url.QueryUnescape(jb.Request.Path)
+		jb.Request.Path = url
 		if v.Body != nil {
 			jb.Request.Body, _ = ioutil.ReadAll(v.Body)
 		}
@@ -92,7 +95,7 @@ func (s *HTTP2Stream) DumpJson() {
 		resheader, err := json.Marshal(jb.Response.Header)
 		reqbody := base64.StdEncoding.EncodeToString(jb.Request.Body)
 		resbody := base64.StdEncoding.EncodeToString(jb.Response.Body)
-		r, err := Db.Exec("insert into traffic_field(sid, time, srcip, srcport,desip,desport,url,method,status,reqheader,reqbody,resheader,resbody,pcap_id) values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", jb.Streamid, jb.Time, jb.SrcIP, jb.SrcPort, jb.DstIP, jb.DstPort, v.URL.RequestURI(), v.Method, jb.Response.StatusCode, reqheader, reqbody, resheader, resbody, 1)
+		r, err := Db.Exec("insert into traffic_field_test(sid, time, srcip, srcport,desip,desport,url,method,status,reqheader,reqbody,resheader,resbody,pcap_id) values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", jb.Streamid, jb.Time, jb.SrcIP, jb.SrcPort, jb.DstIP, jb.DstPort, jb.Request.Path, v.Method, jb.Response.StatusCode, reqheader, reqbody, resheader, resbody, 1)
 		if err != nil {
 			fmt.Println("exec failed, ", err)
 		}
@@ -104,6 +107,7 @@ func (s *HTTP2Stream) DumpJson() {
 
 		fmt.Println("=======")
 		enc := json.NewEncoder(outputStream)
+		enc.SetEscapeHTML(false)
 		_ = enc.Encode(jb)
 	}
 }
