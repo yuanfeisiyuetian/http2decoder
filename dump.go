@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github.com/jmoiron/sqlx"
@@ -25,12 +24,12 @@ type JsonBody struct {
 		Path   string
 		Proto  string
 		Header map[string][]string
-		Body   []byte
+		Body   string
 	}
 	Response struct {
 		StatusCode int
 		Header     map[string][]string
-		Body       []byte
+		Body       string
 	}
 }
 
@@ -82,20 +81,28 @@ func (s *HTTP2Stream) DumpJson() {
 		url, _ := url.QueryUnescape(jb.Request.Path)
 		jb.Request.Path = url
 		if v.Body != nil {
-			jb.Request.Body, _ = ioutil.ReadAll(v.Body)
+			//jb.Request.Body, _ = ioutil.ReadAll(v.Body)
+			reqbody, _ := ioutil.ReadAll(v.Body)
+			jb.Request.Body = string(reqbody)
+			//jb.Request.Body = strconv.QuoteToASCII(string(reqbody))
 		}
 		jb.Response.StatusCode = rsp[k].StatusCode
 		jb.Response.Header = rsp[k].Header
 		if rsp[k].Body != nil {
-			jb.Response.Body, _ = ioutil.ReadAll(rsp[k].Body)
+			//jb.Response.Body, _ = ioutil.ReadAll(rsp[k].Body)
+			resbody, _ := ioutil.ReadAll(rsp[k].Body)
+			jb.Response.Body = string(resbody)
+			//jb.Response.Body = strconv.QuoteToASCII(string(resbody))
 		}
 
 		//写入数据库
 		reqheader, err := json.Marshal(jb.Request.Header)
 		resheader, err := json.Marshal(jb.Response.Header)
-		reqbody := base64.StdEncoding.EncodeToString(jb.Request.Body)
-		resbody := base64.StdEncoding.EncodeToString(jb.Response.Body)
-		r, err := Db.Exec("insert into traffic_field_test(sid, time, srcip, srcport,desip,desport,url,method,status,reqheader,reqbody,resheader,resbody,pcap_id) values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", jb.Streamid, jb.Time, jb.SrcIP, jb.SrcPort, jb.DstIP, jb.DstPort, jb.Request.Path, v.Method, jb.Response.StatusCode, reqheader, reqbody, resheader, resbody, 1)
+		reqbodytowrite := strconv.QuoteToASCII(jb.Request.Body)
+		resbodytowrite := strconv.QuoteToASCII(jb.Response.Body)
+		fmt.Println(reqbodytowrite)
+		fmt.Println(strconv.Unquote(reqbodytowrite))
+		r, err := Db.Exec("insert into traffic_field(sid, time, srcip, srcport,desip,desport,url,method,status,reqheader,reqbody,resheader,resbody,pcap_id) values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", jb.Streamid, jb.Time, jb.SrcIP, jb.SrcPort, jb.DstIP, jb.DstPort, jb.Request.Path, v.Method, jb.Response.StatusCode, reqheader, reqbodytowrite, resheader, resbodytowrite, 1)
 		if err != nil {
 			fmt.Println("exec failed, ", err)
 		}
