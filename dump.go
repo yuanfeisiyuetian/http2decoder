@@ -100,8 +100,6 @@ func (s *HTTP2Stream) DumpJson() {
 		resheader, err := json.Marshal(jb.Response.Header)
 		reqbodytowrite := strconv.QuoteToASCII(jb.Request.Body)
 		resbodytowrite := strconv.QuoteToASCII(jb.Response.Body)
-		fmt.Println(reqbodytowrite)
-		fmt.Println(strconv.Unquote(reqbodytowrite))
 		r, err := Db.Exec("insert into traffic_field(sid, time, srcip, srcport,desip,desport,url,method,status,reqheader,reqbody,resheader,resbody,pcap_id) values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", jb.Streamid, jb.Time, jb.SrcIP, jb.SrcPort, jb.DstIP, jb.DstPort, jb.Request.Path, v.Method, jb.Response.StatusCode, reqheader, reqbodytowrite, resheader, resbodytowrite, 1)
 		if err != nil {
 			fmt.Println("exec failed, ", err)

@@ -14,22 +14,6 @@ var (
 	dbName    string = "5GC"
 )
 
-//type HTTP2 struct {
-//	ID       int    `db:"id"`
-//	Time     string `db:"time"`
-//	Srcip    string `db:"srcip"`
-//	Srcport  string `db:"srcport"`
-//	Desip    string `db:"desip"`
-//	Desport  string `db:"desport"`
-//	Url      string `db:"url"`
-//	Method   string `db:"method"`
-//	Status   string `db:"status"`
-//	Reqheader string `db:"reqheader"`
-//	Reqbody   string `db:"reqbody"`
-//	Resheader string `db:"resheader"`
-//	Resbody   string `db:"resbody"`
-//
-//}
 var Db *sqlx.DB
 
 func ConnectMysql() *sqlx.DB {

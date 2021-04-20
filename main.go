@@ -26,10 +26,14 @@ var filter = flag.String("f", "tcp", "BPF filter for pcap")
 var fname = flag.String("r", "", "Filename to read from, overrides -i")
 var logfile = flag.String("o", "out.log", "Http2 logs file")
 var logAllPackets = flag.Bool("v", false, "Logs every packet in great detail")
+var scan = flag.Bool("c", false, "Scan detect")
 
 // timeout is the length of time to wait befor flushing connections and
 // bidirectional stream pairs.
 const timeout = time.Minute * 5
+
+// 平均几分钟的tcp特征
+const delta = 2
 
 func main() {
 	flag.Parse()
@@ -69,11 +73,16 @@ func main() {
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	packets := packetSource.Packets()
 	ticker := time.Tick(timeout / 4)
+	var t time.Time
 	for {
 		select {
 		case packet := <-packets:
 			// A nil packet indicates the end of a pcap file.
 			if packet == nil {
+				if *scan {
+					printout()
+				}
+				Stafresh()
 				return
 			}
 			if *logAllPackets {
@@ -83,8 +92,29 @@ func main() {
 				log.Println("Unusable packet")
 				continue
 			}
-			tcp := packet.TransportLayer().(*layers.TCP)
-			assembler.AssembleWithTimestamp(packet.NetworkLayer().NetworkFlow(), tcp, packet.Metadata().Timestamp)
+			if *scan {
+				nowtime := packet.Metadata().Timestamp
+				if t.IsZero() {
+					t = nowtime
+					Init()
+				}
+				Getipinfo(packet)
+			}
+			//refresh time
+			nowtime := packet.Metadata().Timestamp
+			if t.IsZero() {
+				t = nowtime
+				Tcpinit()
+			}
+			duration := nowtime.Sub(t)
+			if duration.Minutes() >= delta {
+				Stafresh()
+				t = nowtime
+			}
+			Gettcpinfo(packet)
+
+			//tcp := packet.TransportLayer().(*layers.TCP)
+			//assembler.AssembleWithTimestamp(packet.NetworkLayer().NetworkFlow(), tcp, packet.Metadata().Timestamp)
 
 		case <-ticker:
 			// Every minute, flush connections that haven't seen activity in the past minute.
