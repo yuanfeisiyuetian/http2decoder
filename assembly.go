@@ -36,8 +36,10 @@ type HTTP2Stream struct {
 	DstPort                        gopacket.Endpoint
 	Time                           map[uint32]time.Time
 	Streamid                       uint32
-	Framer                         *http2.Framer
-	isfirst                        bool
+	reqFramer                      *http2.Framer
+	resFramer                      *http2.Framer
+	isreqfirst                     bool
+	isresfirst                     bool
 }
 
 // bidi stores each unidirectional side of a bidirectional stream.
@@ -71,21 +73,23 @@ func (f *myFactory) New(netFlow, tcpFlow gopacket.Flow) tcpassembly.Stream {
 		//	ProtoMajor: 2,
 		//	ProtoMinor: 0,
 		//},
-		isfirst:  true,
-		Request:  make(map[uint32]http.Request),
-		Response: make(map[uint32]http.Response),
-		Time:     make(map[uint32]time.Time),
+		isreqfirst: true,
+		isresfirst: true,
+		Request:    make(map[uint32]http.Request),
+		Response:   make(map[uint32]http.Response),
+		Time:       make(map[uint32]time.Time),
 	}
 	// Find the bidi bidirectional struct for this stream, creating a new one if
 	// one doesn't already exist in the map.
 	k := key{netFlow, tcpFlow}
 	bd := f.bidiMap[k]
-	if s.isfirst {
+	if s.isreqfirst {
 		s.SrcIP = netFlow.Src()
 		s.DstIP = netFlow.Dst()
 		s.SrcPort = tcpFlow.Src()
 		s.DstPort = tcpFlow.Dst()
 	}
+	log.Println("s.SrcIP", s.SrcIP.String(), "s.DstIP", s.DstIP.String(), "s.SrcPort", s.SrcPort.String(), "s.DstPort", s.DstPort.String())
 	if bd == nil {
 		bd = &bidi{a: s, key: k}
 		log.Printf("[%v] created first side of bidirectional stream", bd.key)
@@ -137,13 +141,14 @@ func (s *HTTP2Stream) Reassembled(rs []tcpassembly.Reassembly) {
 			if s.bidi.lastPacketSeen.Before(r.Seen) {
 				s.bidi.lastPacketSeen = r.Seen
 			}
+			// We need the data of the first request timestamps of every http2 stream.
 			if sid != 0 {
 				Firstdata := time.Date(0001, 01, 01, 00, 00, 00, 0000, time.UTC)
-				if s.Time[sid].Equal(Firstdata) {
-					s.Time[sid] = r.Seen
+				if s.bidi.a.Time[sid].Equal(Firstdata) {
+					s.bidi.a.Time[sid] = r.Seen
 				}
-				if s.Time[sid].After(r.Seen) {
-					s.Time[sid] = r.Seen
+				if s.bidi.a.Time[sid].After(r.Seen) {
+					s.bidi.a.Time[sid] = r.Seen
 				}
 			}
 		}

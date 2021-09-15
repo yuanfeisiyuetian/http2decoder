@@ -27,6 +27,7 @@ var fname = flag.String("r", "", "Filename to read from, overrides -i")
 var logfile = flag.String("o", "out.log", "Http2 logs file")
 var logAllPackets = flag.Bool("v", false, "Logs every packet in great detail")
 var scan = flag.Bool("c", false, "Scan detect")
+var tcpfeature = flag.Bool("t", false, "Get tcp feature")
 
 // timeout is the length of time to wait befor flushing connections and
 // bidirectional stream pairs.
@@ -74,47 +75,57 @@ func main() {
 	packets := packetSource.Packets()
 	ticker := time.Tick(timeout / 4)
 	var t time.Time
+	var st time.Time
 	for {
 		select {
 		case packet := <-packets:
 			// A nil packet indicates the end of a pcap file.
 			if packet == nil {
 				if *scan {
-					printout()
+					addtolist()
 				}
-				Stafresh()
+				if *tcpfeature {
+					Stafresh()
+				}
 				return
 			}
 			if *logAllPackets {
 				log.Println(packet)
 			}
+
 			if packet.NetworkLayer() == nil || packet.TransportLayer() == nil || packet.TransportLayer().LayerType() != layers.LayerTypeTCP {
 				log.Println("Unusable packet")
 				continue
 			}
-			if *scan {
+			if *tcpfeature {
 				nowtime := packet.Metadata().Timestamp
 				if t.IsZero() {
 					t = nowtime
-					Init()
+					Tcpinit()
 				}
-				Getipinfo(packet)
+				duration := nowtime.Sub(t)
+				if duration.Minutes() >= delta {
+					Stafresh()
+					t = nowtime
+				}
+				Gettcpinfo(packet)
 			}
-			//refresh time
-			nowtime := packet.Metadata().Timestamp
-			if t.IsZero() {
-				t = nowtime
-				Tcpinit()
+			if *scan {
+				nowtime := packet.Metadata().Timestamp
+				if st.IsZero() {
+					st = nowtime
+					scaninit()
+				}
+				packageprocess(packet)
+				duration := nowtime.Sub(t)
+				if duration.Minutes() >= delta {
+					st = nowtime
+					addtolist()
+				}
 			}
-			duration := nowtime.Sub(t)
-			if duration.Minutes() >= delta {
-				Stafresh()
-				t = nowtime
-			}
-			Gettcpinfo(packet)
 
-			//tcp := packet.TransportLayer().(*layers.TCP)
-			//assembler.AssembleWithTimestamp(packet.NetworkLayer().NetworkFlow(), tcp, packet.Metadata().Timestamp)
+			tcp := packet.TransportLayer().(*layers.TCP)
+			assembler.AssembleWithTimestamp(packet.NetworkLayer().NetworkFlow(), tcp, packet.Metadata().Timestamp)
 
 		case <-ticker:
 			// Every minute, flush connections that haven't seen activity in the past minute.
